@@ -1,64 +1,85 @@
 try:
     import chess
-    import chess.svg
-    import numpy as np
-    import tensorflow as tf
+    import random
     
-    # Chess board representation
-    def board_to_array(board):
-        # Convert the chess board to a numpy array
-        board_array = np.zeros((8, 8, 6), dtype=np.uint8)
+    def evaluate_board(board):
+        # Simple evaluation function based on piece values
+        piece_values = {
+            chess.PAWN: 1,
+            chess.KNIGHT: 3,
+            chess.BISHOP: 3,
+            chess.ROOK: 5,
+            chess.QUEEN: 9,
+            chess.KING: 100
+        }
     
-        for i in range(8):
-            for j in range(8):
-                piece = board.piece_at(chess.square(i, j))
-                if piece is not None:
-                    piece_type = piece.piece_type
-                    color = piece.color
-                    index = 0 if color == chess.WHITE else 1
-                    board_array[i, j, piece_type - 1 + index * 6] = 1
+        evaluation = 0
+        for square in chess.SQUARES:
+            piece = board.piece_at(square)
+            if piece is not None:
+                value = piece_values.get(piece.piece_type, 0)
+                evaluation += value if piece.color == chess.WHITE else -value
     
-        return board_array
+        return evaluation
     
-    # Neural network model
-    model = tf.keras.Sequential([
-        tf.keras.layers.Conv2D(64, (3, 3), activation='relu', input_shape=(8, 8, 6)),
-        tf.keras.layers.Flatten(),
-        tf.keras.layers.Dense(128, activation='relu'),
-        tf.keras.layers.Dense(1, activation='sigmoid')
-    ])
+    def minimax(board, depth, maximizing_player):
+        if depth == 0 or board.is_game_over():
+            return evaluate_board(board)
     
-    model.compile(optimizer='adam', loss='binary_crossentropy', metrics=['accuracy'])
+        legal_moves = list(board.legal_moves)
     
-    # Self-play and learning
-    for _ in range(1000):  # Adjust the number of iterations as needed
+        if maximizing_player:
+            max_eval = float('-inf')
+            for move in legal_moves:
+                board.push(move)
+                eval = minimax(board, depth - 1, False)
+                max_eval = max(max_eval, eval)
+                board.pop()
+            return max_eval
+        else:
+            min_eval = float('inf')
+            for move in legal_moves:
+                board.push(move)
+                eval = minimax(board, depth - 1, True)
+                min_eval = min(min_eval, eval)
+                board.pop()
+            return min_eval
+    
+    def get_best_move(board, depth):
+        legal_moves = list(board.legal_moves)
+        best_move = None
+        best_eval = float('-inf')
+    
+        for move in legal_moves:
+            board.push(move)
+            eval = minimax(board, depth - 1, False)
+            board.pop()
+    
+            if eval > best_eval:
+                best_eval = eval
+                best_move = move
+    
+        return best_move
+    
+    def play_game():
         board = chess.Board()
     
         while not board.is_game_over():
-            # Generate all legal moves
-            legal_moves = [str(move) for move in board.legal_moves]
+            if board.turn == chess.WHITE:
+                move = get_best_move(board, depth=2)
+            else:
+                # Random move for black (opponent)
+                move = random.choice(list(board.legal_moves))
     
-            # Convert the board to the neural network input format
-            input_data = np.array([board_to_array(board)])
-            
-            # Get the neural network's evaluation for each move
-            move_evaluations = model.predict(input_data)
+            board.push(move)
+            print(board)
     
-            # Choose the move with the highest evaluation
-            best_move_index = np.argmax(move_evaluations)
-            chosen_move = chess.Move.from_uci(legal_moves[best_move_index])
+        print("Game Over")
+        print("Result:", board.result())
     
-            # Play the chosen move on the board
-            board.push(chosen_move)
-    
-        # Assign a reward based on the game outcome (1 for win, 0 for draw, -1 for loss)
-        reward = 1 if board.result() == '1-0' else 0 if board.result() == '1/2-1/2' else -1
-    
-        # Train the neural network with the input data and reward
-        model.train_on_batch(input_data, np.array([reward]))
-    
-    # Save the trained model
-    model.save('chess_bot_model.h5')
+    if __name__ == "__main__":
+        play_game()
+
 except Exception as e:
     print(e)
     input("")
