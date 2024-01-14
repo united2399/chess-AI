@@ -61,3 +61,4 @@ try:
     model.save('chess_bot_model.h5')
 except Exception as e:
     print(e)
+    input("")
